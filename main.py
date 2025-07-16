@@ -2,17 +2,19 @@ import os
 import re
 import mimetypes
 import webbrowser
-# from translate import Translator
 import base64
 import csv
 import json
 from collections import Counter
 from mcp.server.fastmcp import FastMCP
 from typing import List, Dict, Tuple
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
 
-mcp = FastMCP('MCP')
+mcp = FastMCP('MCP',log_level="ERROR")
 # 安全目录配置
-SAFE_BASE_DIR = r"D:\PyDemo\Resources"
+SAFE_BASE_DIR = r"D:\WorkSpace\mcp-server\Resource"
 
 # 初始化安全目录
 if not os.path.exists(SAFE_BASE_DIR):
@@ -182,25 +184,91 @@ def analyze_text(file_path: str) -> dict:
     except Exception as e:
         return {"error": str(e)}
 
-# @mcp.tool()
-# def translate_text(original_language: str,target_lang: str,text: str, ) -> str:
-#     """
-#         翻译文本内容
-
-#         功能:
-#             1. 支持多种语言翻译
-#             2. 自动检测源语言
-#             3. 支持自定义目标语言
-
-#         参数:
-#             original_language: 初始语言
-#             target_lang: 目标语言
-#             text: 要翻译的文本内容
-#         返回:
-#             翻译后的文本
-#     """
-#     text = Translator(from_lang=original_language, to_lang=target_lang).translate(text)
-#     return f"翻译结果: {text}"
+@mcp.tool()
+def analyze_data(file_path: str, file_name: str, output_dir: str) -> str:
+    """
+    执行数据的全面分析并将图表保存到指定目录
+    
+    参数:
+        file_path (str): 数据文件路径
+        file_name (str): 数据文件名
+        output_dir (str): 图表保存目录
+        
+    返回:
+        str: 分析结果摘要，包含图表保存路径
+    
+    功能:
+        1. 读取并清洗数据
+        2. 显示数据统计摘要
+        3. 可视化数据的分布并保存图表
+        4. 分析数据之间的关系并保存图表
+    """
+    try:
+        
+        # 构建完整文件路径
+        absolute_path = os.path.join(file_path, file_name)
+        if not os.path.isfile(absolute_path):
+            raise FileNotFoundError(f"文件不存在: {absolute_path}")
+        
+        # 读取数据
+        data = pd.read_csv(absolute_path)
+        data = data.dropna()
+        
+        # 准备结果信息
+        result_info = f"数据分析完成: {file_name}\n"
+        result_info += f"数据行数: {len(data)}\n"
+        result_info += f"数据列数: {len(data.columns)}\n"
+        
+        # 数据统计摘要
+        stats = data.describe().to_string()
+        result_info += "\n统计摘要:\n" + stats + "\n"
+        
+        # 设置中文字体支持
+        plt.rcParams['font.sans-serif'] = ['SimHei', 'Microsoft YaHei', 'WenQuanYi Micro Hei', 'sans-serif']
+        plt.rcParams['axes.unicode_minus'] = False
+        
+        # 图表1: 房价分布图
+        plt.figure(figsize=(10, 6))
+        sns.histplot(data['price'], kde=True)
+        plt.title('房价分布图')
+        dist_path = os.path.join(output_dir, f"{os.path.splitext(file_name)[0]}_price_distribution.png")
+        plt.savefig(dist_path, bbox_inches='tight', dpi=150)
+        plt.close()
+        result_info += f"\n房价分布图已保存至: {dist_path}"
+        
+        # 图表2: 房间数与房价关系图
+        plt.figure(figsize=(10, 6))
+        sns.scatterplot(x='rooms', y='price', data=data)
+        plt.title('房间数与房价关系图')
+        scatter_path = os.path.join(output_dir, f"{os.path.splitext(file_name)[0]}_rooms_vs_price.png")
+        plt.savefig(scatter_path, bbox_inches='tight', dpi=150)
+        plt.close()
+        result_info += f"\n房间数与房价关系图已保存至: {scatter_path}"
+        
+        # 图表3: 不同地区的房价箱线图
+        plt.figure(figsize=(12, 8))
+        sns.boxplot(x='location', y='price', data=data)
+        plt.title('不同地区的房价箱线图')
+        plt.xticks(rotation=45)
+        boxplot_path = os.path.join(output_dir, f"{os.path.splitext(file_name)[0]}_location_boxplot.png")
+        plt.savefig(boxplot_path, bbox_inches='tight', dpi=150)
+        plt.close()
+        result_info += f"\n不同地区的房价箱线图已保存至: {boxplot_path}"
+        
+        # 可选: 保存统计摘要到文件
+        stats_path = os.path.join(output_dir, f"{os.path.splitext(file_name)[0]}_statistics.txt")
+        with open(stats_path, 'w', encoding='utf-8') as f:
+            f.write(stats)
+        result_info += f"\n统计摘要已保存至: {stats_path}"
+        
+        return result_info
+        
+    except Exception as e:
+        # 捕获并返回详细错误信息
+        error_msg = f"分析失败: {str(e)}\n"
+        error_msg += f"文件路径: {file_path}\n"
+        error_msg += f"文件名: {file_name}"
+        return error_msg
 @mcp.tool()
 def convert_to_html(file_path: str, style: str = "default") -> str:
     """
